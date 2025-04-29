@@ -1,0 +1,66 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  aulaocvusecase
+
+  Template SAM para análise de compatibilidade entre CVs e vagas
+
+# More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
+Globals:
+  Function:
+    Timeout: 30 # Aumentado devido ao processamento do Bedrock
+    MemorySize: 256
+
+    # You can add LoggingConfig parameters such as the Logformat, Log Group, and SystemLogLevel or ApplicationLogLevel. Learn more here https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-function.html#sam-function-loggingconfig.
+    LoggingConfig:
+      LogFormat: JSON
+Resources:
+  AgentCVFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: agentcv/
+      Handler: app.lambdaHandler
+      Runtime: nodejs20.x
+      Architectures:
+        - x86_64
+      Environment:
+        Variables:
+          JOBS_TABLE_NAME: TabelaVagas
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: TabelaVagas
+        - Statement:
+            Effect: Allow
+            Action:
+              - "bedrock:InvokeModel"
+            Resource: "*"
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /analyze-cv
+            Method: post
+            RestApiId: !Ref AgentCVApi
+
+  # API Gateway definido explicitamente para configurações CORS
+  AgentCVApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: Prod
+      Cors:
+        AllowMethods: "'OPTIONS,POST'"
+        AllowHeaders: "'Content-Type'"
+        AllowOrigin: "'*'"
+
+Outputs:
+  AgentCVApi:
+    Description: "API Gateway endpoint URL para estágio Prod para a função de análise de CV"
+    Value: !Sub "https://${AgentCVApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/analyze-cv/"
+
+  AgentCVFunction:
+    Description: "ARN da função Lambda para análise de CV"
+    Value: !GetAtt AgentCVFunction.Arn
+
+  AgentCVFunctionIamRole:
+    Description: "IAM Role criada implicitamente para a função de análise de CV"
+    Value: !GetAtt AgentCVFunctionRole.Arn
